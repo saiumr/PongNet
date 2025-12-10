@@ -1,11 +1,16 @@
-#include <SDL3/SDL.h>
+#include "game.h"
 #include <SDL3_net/SDL_net.h>
 
 int main(int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_EVENTS);
+    Game game;
+    game.Init("PontNet(Client)");
+
     NET_Init();
-    SDL_Log("hello pont net!");
+    SDL_Log("hello pong net!");
+
+    game.Run();
+
     NET_Quit();
-    SDL_Quit();
+
     return 0;
 }
