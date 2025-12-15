@@ -12,3 +12,19 @@ cmake --build build -j
 cd build/Debug
 ./PongNet.exe
 ```
+
+## PongNet network design
+
+PongNet(Client)
+
+- get input state (up/down)
+- send input state to server
+- receive server broadcast message (object + players)
+- update game data
+
+PontNet(Server)
+
+- collecting input state came from two clients
+- update object move and collision
+- update the position of  player1 and player2
+- broadcast position to two clients

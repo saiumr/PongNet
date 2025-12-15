@@ -2,6 +2,10 @@
 
 #include <SDL3/SDL.h>
 #include <memory>
+#include <functional>
+#include <mutex>
+#include <queue>
+#include "protocol.h"
 
 struct RectObject {
     SDL_FRect body;
@@ -34,26 +38,54 @@ private:
     Player      player1_;
     Player      player2_;
 
+    PlayerId    player_id_;
+
     WindowPtr   window_;
     RendererPtr renderer_;
     bool        running_;
 
     uint8_t     state_mask_;  // player control w/s and up/down key control player1/2 up/down, on BIT 0/1/2/3
                               // rect object, BIT 4/5 =1 is x/y position direction.
+    std::queue<NetEvent> net_events_;
+    std::mutex           net_event_mutex_;
 
+    bool        is_online_;
+    float       fps_;
+
+    void Init(const char* title);
     void HandleInput();
     void Update(float delta_time);
     void Render();
     void Cleanup();
 
+    // online
+    // each frame is processed once
+    void ProcessNetEvents();
+
 public:
-    Game() = default;
+    std::function<void()> Send2ServerCallback { nullptr };
+
+    Game();
     ~Game();
-    void Init(const char* title);
-    void Run();
+    void Loop();
+    
     const uint8_t get_state_mask() const;
-    const float get_rect_object_speed() const;
-    const float get_player_speed() const;
-    void set_rect_object_speed(float speed);
-    void set_player_speed(float speed);
+    void set_state_mask(const uint8_t state_mask);
+
+    const float get_fps() const;
+
+    const RectObject get_rect_object() const;
+    void  set_rect_object(const RectObject& r);
+
+    const Player get_player(PlayerId id) const;
+    void  set_player(PlayerId id, const Player& p);
+
+    // online
+    const bool get_is_online() const;
+    void set_is_online(bool is_online);
+    const PlayerId get_player_id() const;
+    void set_player_id(PlayerId id);
+    void AddNetEvent(const NetEvent& e);
 };
+
+bool AABB_Collision(const SDL_FRect& a, const SDL_FRect& b);
