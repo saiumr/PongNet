@@ -37,6 +37,13 @@ void Game::ProcessNetEvents() {
         case MessageType::kInitMsg: {
             auto* msg { reinterpret_cast<InitMsg*>(ne.data.data()) };
             player_id_ = msg->p_id;
+            if (player_id_ == PlayerId::kPlayer1) {
+                player1_.color = SDL_Color { 0, 255, 0, 255 };
+                SDL_Log("you are player 1 (left), use w/s control move.");
+            } else if(player_id_ == PlayerId::kPlayer2) {
+                player2_.color = SDL_Color { 0, 255, 0, 255 };
+                SDL_Log("you are player 2 (right), use ↑/↓ control move.");
+            }
             break;
         }
         case MessageType::kPlayerInputMsg: {
