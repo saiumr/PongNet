@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.16)
 project(pong_net)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -30,13 +30,21 @@ add_subdirectory(vendored/SDL_net EXCLUDE_FROM_ALL)
 
 find_package(SDL3   REQUIRED)
 
+# for linux
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 target_link_libraries(${PONG_SERVER} PRIVATE
     SDL3::SDL3
-    SDL3_net::SDL3_net)
+    SDL3_net::SDL3_net
+    Threads::Threads
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SDL3::SDL3
-    SDL3_net::SDL3_net)
+    SDL3_net::SDL3_net
+    Threads::Threads
+)
 
 # copy dll lib to output dir on windows
 if(WIN32 AND TARGET SDL3::SDL3)
