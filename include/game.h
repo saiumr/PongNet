@@ -5,8 +5,10 @@
 #include <functional>
 #include <mutex>
 #include <queue>
+#include <optional>
 #include "protocol.h"
 
+// ball
 struct RectObject {
     SDL_FRect body;
     float speed;
@@ -31,6 +33,12 @@ constexpr SDL_Color OBJECT_COLOR { 255, 255, 255, 255 };
 constexpr SDL_Color BG_COLOR     { 0, 0, 0, 255 };
 constexpr float WINDOW_WIDTH  { 800.0f };
 constexpr float WINDOW_HEIGHT { 600.0f };
+constexpr float PLAYER_WIDTH  { 45.0f  };
+constexpr float PLAYER_HEIGHT { 150.0f };
+constexpr float PLAYER_SPEED  { 300.0f };
+constexpr float BALL_WIDTH    { 50.0f  };
+constexpr float BALL_HEIGHT   { 50.0f  };
+constexpr float BALL_SPEED    { 200.0f };
 
 class Game {
 private:
@@ -49,18 +57,30 @@ private:
     std::queue<NetEvent> net_events_;
     std::mutex           net_event_mutex_;
 
+    std::optional<GameStateMsg> latest_server_state_;
+    std::mutex server_state_mutex_;
+
     bool        is_online_;
     float       fps_;
 
+    // smooth animation
+    SDL_FRect render_ball_;
+    float     render_p1_y_;
+    float     render_p2_y_;
+
     void Init(const char* title);
     void HandleInput();
-    void Update(float delta_time);
+    void Update(float dt);
     void Render();
     void Cleanup();
 
     // online
     // each frame is processed once
     void ProcessNetEvents();
+    
+    // send an input message per 50 frames
+    void PredictLocalPlayer(float dt);
+    void InterpolateFromServer(float dt);
 
 public:
     std::function<void()> Send2ServerCallback { nullptr };
@@ -89,3 +109,4 @@ public:
 };
 
 bool AABB_Collision(const SDL_FRect& a, const SDL_FRect& b);
+float Lerp(float a, float b, float t);

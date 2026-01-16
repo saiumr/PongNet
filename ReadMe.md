@@ -25,7 +25,22 @@ cd build
 ./pong_net.exe     # terminal window 2, player 2, use up/down arrow keys controlssssssssss
 ```
 
-## PongNet network design
+## New PongNet network design
+
+Server authority model.  
+
+Client:  
+
+1. Predicting local input update result
+2. Send client's inputs to server  
+3. Interpolate the local results and server results (target values)  
+
+Server:  
+
+1. Process game updating logic on server  
+2. Send result to each clients (I have paired the two clients that recently joined the server for communication)  
+
+## PongNet network design (deprecated)
 
 PongNet(Client)
 

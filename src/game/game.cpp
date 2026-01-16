@@ -13,8 +13,8 @@ void Game::Loop() {
     while (running_) {
         HandleInput();
         if (is_online_) {
+            ProcessNetEvents();  // eat server state firstly (latest server state + local prediction = current frame rendering)
             if(Send2ServerCallback) Send2ServerCallback();  // online, accept state_mask_ and position
-            ProcessNetEvents();
         }
 
         Uint64 now = SDL_GetPerformanceCounter();
@@ -39,25 +39,22 @@ void Game::ProcessNetEvents() {
             player_id_ = msg->p_id;
             if (player_id_ == PlayerId::kPlayer1) {
                 player1_.color = SDL_Color { 0, 255, 0, 255 };
-                SDL_Log("you are player 1 (left), use w/s control move.");
+                SDL_Log("you are player 1 (left side), use w/s control move.");
             } else if(player_id_ == PlayerId::kPlayer2) {
                 player2_.color = SDL_Color { 0, 255, 0, 255 };
-                SDL_Log("you are player 2 (right), use ↑/↓ control move.");
+                SDL_Log("you are player 2 (right side), use ↑/↓ control move.");
             }
             break;
         }
-        case MessageType::kPlayerInputMsg: {
-            auto* msg { reinterpret_cast<PlayerInputMsg*>(ne.data.data()) };
-            state_mask_ |= (msg->mask & 0x0F);
-            break;
-        }
+        // case MessageType::kPlayerInputMsg: {
+        //     auto* msg { reinterpret_cast<PlayerInputMsg*>(ne.data.data()) };
+        //     state_mask_ |= (msg->mask & 0x0F);
+        //     break;
+        // }
         case MessageType::kGameStateMsg: {
-            const GameStateMsg* msg { reinterpret_cast<const GameStateMsg*>(ne.data.data()) };
-            if (player_id_ == PlayerId::kPlayer2) {
-                rect_object_.body.x = msg->ball_x;
-                rect_object_.body.y = msg->ball_y;
-                player1_.body.y = msg->p_y;
-            }
+            auto* msg { reinterpret_cast<GameStateMsg*>(ne.data.data()) };
+            std::lock_guard<std::mutex> lock(server_state_mutex_);
+            latest_server_state_ = *msg;
             break;
         }
         default:
@@ -68,6 +65,35 @@ void Game::ProcessNetEvents() {
     }
 }
 
+void Game::PredictLocalPlayer(float dt) {
+    if (player_id_ == PlayerId::kPlayer1) {
+        if (state_mask_ & (1 << 0))
+            player1_.body.y -= player1_.speed * dt;
+        if (state_mask_ & (1 << 1))
+            player1_.body.y += player1_.speed * dt;
+    } else {
+        if (state_mask_ & (1 << 2))
+            player2_.body.y -= player2_.speed * dt;
+        if (state_mask_ & (1 << 3))
+            player2_.body.y += player2_.speed * dt;
+    }
+}
+
+// smooth animation
+void Game::InterpolateFromServer(float dt) {
+    std::lock_guard<std::mutex> lock(server_state_mutex_);
+    if (!latest_server_state_) return;
+
+    constexpr float SMOOTH { 0.2f };
+
+    // ball
+    render_ball_.x = Lerp(render_ball_.x, latest_server_state_->ball_x, SMOOTH);
+    render_ball_.y = Lerp(render_ball_.y, latest_server_state_->ball_y, SMOOTH);
+
+    // players
+    render_p1_y_ = Lerp(render_p1_y_, latest_server_state_->p1_y, SMOOTH);
+    render_p2_y_ = Lerp(render_p2_y_, latest_server_state_->p2_y, SMOOTH);
+}
 
 const uint8_t Game::get_state_mask() const { return state_mask_; }
 void Game::set_state_mask(const uint8_t state_mask) {
@@ -127,19 +153,24 @@ void Game::Init(const char* title) {
     renderer_.reset(r);
 
     rect_object_.color = OBJECT_COLOR;
-    rect_object_.speed = 200;
-    rect_object_.body.w = 50;
-    rect_object_.body.h = 50;
+    rect_object_.speed = BALL_SPEED;
+    rect_object_.body.w = BALL_WIDTH;
+    rect_object_.body.h = BALL_HEIGHT;
     rect_object_.body.x = (WINDOW_WIDTH - rect_object_.body.w) / 2;
     rect_object_.body.y = (WINDOW_HEIGHT - rect_object_.body.h) / 2;
 
     player1_.color = player2_.color = PLAYER_COLOR;
-    player1_.speed = player2_.speed = 300;
-    player1_.body.w = player2_.body.w = 45;
-    player1_.body.h = player2_.body.h = 150;
+    player1_.speed = player2_.speed = PLAYER_SPEED;
+    player1_.body.w = player2_.body.w = PLAYER_WIDTH;
+    player1_.body.h = player2_.body.h = PLAYER_HEIGHT;
     player1_.body.y = player2_.body.y = (WINDOW_HEIGHT - player1_.body.h) / 2;
     player1_.body.x = 0;
     player2_.body.x = WINDOW_WIDTH - player2_.body.w;
+
+    // for smooth animation
+    render_ball_ = rect_object_.body;
+    render_p1_y_ = player1_.body.y;
+    render_p2_y_ = player2_.body.y;
 
     player_id_ = PlayerId::kPlayer1;
 
@@ -153,15 +184,21 @@ void Game::Cleanup() {
 }
 
 void Game::Render() {
+    SDL_FRect ball { render_ball_  };
+    SDL_FRect p1   { player1_.body };
+    SDL_FRect p2   { player2_.body }; 
+    p1.y = render_p1_y_;
+    p2.y = render_p2_y_;
+
     SDL_SetRenderDrawColor(renderer_.get(), BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, BG_COLOR.a);
     SDL_RenderClear(renderer_.get());
 
     SDL_SetRenderDrawColor(renderer_.get(), rect_object_.color.r, rect_object_.color.g, rect_object_.color.b, rect_object_.color.a);
-    SDL_RenderFillRect(renderer_.get(), &rect_object_.body);
+    SDL_RenderFillRect(renderer_.get(), &ball);
     SDL_SetRenderDrawColor(renderer_.get(), player1_.color.r, player1_.color.g, player1_.color.b, player1_.color.a);
-    SDL_RenderFillRect(renderer_.get(), &player1_.body);
+    SDL_RenderFillRect(renderer_.get(), &p1);
     SDL_SetRenderDrawColor(renderer_.get(), player2_.color.r, player2_.color.g, player2_.color.b, player2_.color.a);
-    SDL_RenderFillRect(renderer_.get(), &player2_.body);
+    SDL_RenderFillRect(renderer_.get(), &p2);
 
     SDL_RenderPresent(renderer_.get());
 }
@@ -212,60 +249,68 @@ bool AABB_Collision(const SDL_FRect& a, const SDL_FRect& b) {
            a.y + a.h > b.y;
 }
 
-void Game::Update(float delta_time) {
-    // players
-    if (state_mask_ & (1 << 0)) {
-        player1_.body.y -= player1_.speed * delta_time;
-    } 
-    if (state_mask_ & (1 << 1)) {
-        player1_.body.y += player1_.speed * delta_time;
-    }
-    if (state_mask_ & (1 << 2)) {
-        player2_.body.y -= player2_.speed * delta_time;
-    } 
-    if (state_mask_ & (1 << 3)) {
-        player2_.body.y += player2_.speed * delta_time;
-    }
+float Lerp(float a, float b, float t) {
+    return a + (b - a) * t;
+}
 
-    // rect object left/right move 
-    if (state_mask_ & (1 << 4)) {
-        rect_object_.body.x += rect_object_.speed * delta_time;
+void Game::Update(float dt) {
+    if (is_online_) {
+        PredictLocalPlayer(dt);     // just process self prediction
+        InterpolateFromServer(dt);  // use server state
     } else {
-        rect_object_.body.x -= rect_object_.speed * delta_time;
-    }
-    // rect object up/down move   
-    if (state_mask_ & (1 << 5)) {
-        rect_object_.body.y += rect_object_.speed * delta_time;
-    } else {
-        rect_object_.body.y -= rect_object_.speed * delta_time;
-    }
+        // players
+        if (state_mask_ & (1 << 0)) {
+            player1_.body.y -= player1_.speed * dt;
+        } 
+        if (state_mask_ & (1 << 1)) {
+            player1_.body.y += player1_.speed * dt;
+        }
+        if (state_mask_ & (1 << 2)) {
+            player2_.body.y -= player2_.speed * dt;
+        } 
+        if (state_mask_ & (1 << 3)) {
+            player2_.body.y += player2_.speed * dt;
+        }
 
-    // player bound limit
-    if (player1_.body.y < 0) player1_.body.y = 0;
-    else if (player1_.body.y > WINDOW_HEIGHT - player1_.body.h) player1_.body.y = WINDOW_HEIGHT - player1_.body.h;
-    if (player2_.body.y < 0) player2_.body.y = 0;
-    else if (player2_.body.y > WINDOW_HEIGHT - player2_.body.h) player2_.body.y = WINDOW_HEIGHT - player2_.body.h;
+        // rect object left/right move 
+        if (state_mask_ & (1 << 4)) {
+            rect_object_.body.x += rect_object_.speed * dt;
+        } else {
+            rect_object_.body.x -= rect_object_.speed * dt;
+        }
+        // rect object up/down move   
+        if (state_mask_ & (1 << 5)) {
+            rect_object_.body.y += rect_object_.speed * dt;
+        } else {
+            rect_object_.body.y -= rect_object_.speed * dt;
+        }
 
-    // rect object bound limit
-    if (rect_object_.body.x < 0) {
-        rect_object_.body.x = 0;
-        state_mask_ |= (1<<4);
-    } else if (rect_object_.body.x > WINDOW_WIDTH - rect_object_.body.w) {
-        rect_object_.body.x = WINDOW_WIDTH - rect_object_.body.w;
-        state_mask_ &= ~(1<<4);
-    }
-    if (rect_object_.body.y < 0) {
-        rect_object_.body.y = 0;
-        state_mask_ |= (1<<5);
-    } else if (rect_object_.body.y > WINDOW_HEIGHT - rect_object_.body.h) {
-        rect_object_.body.y = WINDOW_HEIGHT - rect_object_.body.h;
-        state_mask_ &= ~(1<<5);
-    }
+        // player bound limit
+        if (player1_.body.y < 0) player1_.body.y = 0;
+        else if (player1_.body.y > WINDOW_HEIGHT - player1_.body.h) player1_.body.y = WINDOW_HEIGHT - player1_.body.h;
+        if (player2_.body.y < 0) player2_.body.y = 0;
+        else if (player2_.body.y > WINDOW_HEIGHT - player2_.body.h) player2_.body.y = WINDOW_HEIGHT - player2_.body.h;
 
-    if (AABB_Collision(player1_.body, rect_object_.body)) {
-        state_mask_ |= (1<<4);
-    } else if (AABB_Collision(player2_.body, rect_object_.body)) {
-        state_mask_ &= ~(1<<4);
-    }
+        // rect object bound limit
+        if (rect_object_.body.x < 0) {
+            rect_object_.body.x = 0;
+            state_mask_ |= (1<<4);
+        } else if (rect_object_.body.x > WINDOW_WIDTH - rect_object_.body.w) {
+            rect_object_.body.x = WINDOW_WIDTH - rect_object_.body.w;
+            state_mask_ &= ~(1<<4);
+        }
+        if (rect_object_.body.y < 0) {
+            rect_object_.body.y = 0;
+            state_mask_ |= (1<<5);
+        } else if (rect_object_.body.y > WINDOW_HEIGHT - rect_object_.body.h) {
+            rect_object_.body.y = WINDOW_HEIGHT - rect_object_.body.h;
+            state_mask_ &= ~(1<<5);
+        }
 
+        if (AABB_Collision(player1_.body, rect_object_.body)) {
+            state_mask_ |= (1<<4);
+        } else if (AABB_Collision(player2_.body, rect_object_.body)) {
+            state_mask_ &= ~(1<<4);
+        }
+    }
 }
