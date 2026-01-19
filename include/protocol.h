@@ -21,6 +21,7 @@ struct InitMsg {
 struct PlayerInputMsg {
     MessageType msg_type { MessageType::kPlayerInputMsg };
     Tick      tick;      // input moment
+    Tick      client_time_ms;
     uint8_t   mask;      // bit 0/1/2/3 p1/2 up/down
     PlayerId  p_id;
 };
@@ -30,6 +31,7 @@ struct PlayerInputMsg {
 struct GameStateMsg {
     MessageType msg_type { MessageType::kGameStateMsg };
     Tick  tick;    // server authentic tick
+    Tick  echo_client_time_ms;
     float ball_x;
     float ball_y;
     float p1_y;

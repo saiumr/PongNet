@@ -134,6 +134,7 @@ int main(int argc, char* argv[]) {
             if (matched_index != -1) {
                 GameStateMsg s;
                 s.tick   = gs.tick;
+                s.echo_client_time_ms = msg->client_time_ms;  // echo time, assist the client in determining the timing of its own message sending
                 s.ball_x = gs.ball_x;
                 s.ball_y = gs.ball_y;
                 s.p1_y   = gs.p1.y;

@@ -23,6 +23,7 @@ int main(int argc, char* argv[]) {
 
             PlayerInputMsg msg;
             msg.tick = 0;
+            msg.client_time_ms = SDL_GetTicks();
             msg.mask = game.get_state_mask();
             msg.p_id = game.get_player_id();
 

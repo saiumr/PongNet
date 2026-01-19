@@ -60,8 +60,10 @@ private:
     std::optional<GameStateMsg> latest_server_state_;
     std::mutex server_state_mutex_;
 
+    // info
     bool        is_online_;
-    float       fps_;
+    Tick        rtt_;
+    uint32_t    fps_;
 
     // smooth animation
     SDL_FRect render_ball_;
@@ -81,6 +83,9 @@ private:
     // send an input message per 50 frames
     void PredictLocalPlayer(float dt);
     void InterpolateFromServer(float dt);
+
+    // no need to render info on every frame
+    void RenderInfo();
 
 public:
     std::function<void()> Send2ServerCallback { nullptr };

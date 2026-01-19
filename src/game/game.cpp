@@ -84,6 +84,9 @@ void Game::InterpolateFromServer(float dt) {
     std::lock_guard<std::mutex> lock(server_state_mutex_);
     if (!latest_server_state_) return;
 
+    // calculate rtt
+    rtt_ = SDL_GetTicks() - latest_server_state_->echo_client_time_ms;
+
     constexpr float SMOOTH { 0.2f };
 
     // ball
@@ -183,12 +186,28 @@ void Game::Cleanup() {
     SDL_Quit();
 }
 
+void Game::RenderInfo() {
+    static uint32_t last_render = SDL_GetTicks();
+    uint32_t now = SDL_GetTicks();
+    if (now - last_render < 3000) return;   // 3s
+
+    // print as render
+    SDL_Log("fps: %u, rtt: %u ms", fps_, rtt_);
+
+    last_render = now;
+}
+
 void Game::Render() {
-    SDL_FRect ball { render_ball_  };
+    SDL_FRect ball { rect_object_.body  };
     SDL_FRect p1   { player1_.body };
     SDL_FRect p2   { player2_.body }; 
-    p1.y = render_p1_y_;
-    p2.y = render_p2_y_;
+    
+    // smooth animation
+    if (is_online_) {
+        ball = render_ball_;
+        p1.y = render_p1_y_;
+        p2.y = render_p2_y_;
+    }
 
     SDL_SetRenderDrawColor(renderer_.get(), BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, BG_COLOR.a);
     SDL_RenderClear(renderer_.get());
@@ -199,6 +218,8 @@ void Game::Render() {
     SDL_RenderFillRect(renderer_.get(), &p1);
     SDL_SetRenderDrawColor(renderer_.get(), player2_.color.r, player2_.color.g, player2_.color.b, player2_.color.a);
     SDL_RenderFillRect(renderer_.get(), &p2);
+
+    RenderInfo();
 
     SDL_RenderPresent(renderer_.get());
 }
