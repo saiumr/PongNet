@@ -25,6 +25,43 @@ cd build
 ./pong_net.exe     # terminal window 2, player 2, use up/down arrow keys controlssssssssss
 ```
 
+## online display  
+
+![online](./online_display.gif)
+
+## offline display  
+
+Just run pong_net.exe (or pong_net).
+
+![offline](./offline_display.gif)  
+
+## deploy to your own server  
+
+At server.
+
+Clone this project to your server and build it, then (maybe) you use following command run server.  
+
+```bash
+nohup ./pong_server > pong_server.log 2>&1 &
+```
+
+Find this process thread (get pid).  
+
+```bash
+ps -ef | grep pong_server
+```
+
+Kill it.  
+
+```bash
+kill [pid]
+```
+
+At client.
+
+Change connecting ip(match to your server) in [pong_client.cpp](./src/pong_client.cpp#L12), then build it and execute.  
+
+
 ## New PongNet network design
 
 Server authority model.  
