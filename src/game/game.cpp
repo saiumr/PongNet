@@ -87,7 +87,7 @@ void Game::InterpolateFromServer(float dt) {
     // calculate rtt
     rtt_ = SDL_GetTicks() - latest_server_state_->echo_client_time_ms;
 
-    constexpr float SMOOTH { 0.2f };
+    constexpr float SMOOTH { 0.32f };
 
     // ball
     render_ball_.x = Lerp(render_ball_.x, latest_server_state_->ball_x, SMOOTH);
